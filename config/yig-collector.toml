@@ -1,0 +1,11 @@
+log_path = "/var/log/yig/collector.log"
+bucket_log_path =""
+tidb_info = "root:@tcp(192.168.2.128:4000)/yig"
+db_max_open_conns = 10240
+db_max_idle_conns = 1024
+db_conn_max_life_seconds = 300
+
+[producer]
+endpoint = "s3.test.com:8080"
+accessKey = "hehehehe"
+secretKey = "hehehehe"
