@@ -3,24 +3,23 @@ package tidbclient
 import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
-	"os"
+	"github.com/imegao/yig-collector/config"
 	"time"
-	"yig-collector/config"
 )
 
 type TidbClient struct {
 	Client *sql.DB
 }
 
-func NewTidbClient() *TidbClient {
+func NewTidbClient() (*TidbClient,error) {
 	cli := &TidbClient{}
-	conn, err := sql.Open("mysql", config.Conf.LogPath)
+	conn, err := sql.Open("mysql", config.Conf.TidbInfo)
 	if err != nil {
-		os.Exit(1)
+		return nil,err
 	}
 	conn.SetMaxIdleConns(config.Conf.DbMaxIdleConns)
 	conn.SetMaxOpenConns(config.Conf.DbMaxOpenConns)
 	conn.SetConnMaxLifetime(time.Duration(config.Conf.DbConnMaxLifeSeconds) * time.Second)
 	cli.Client = conn
-	return cli
+	return cli,nil
 }

@@ -1,4 +1,4 @@
-module yig-collector
+module github.com/imegao/yig-collector
 
 go 1.12
 

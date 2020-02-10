@@ -1,11 +1,11 @@
 package s3client
 
 import (
+	"github.com/imegao/yig-collector/config"
 	"github.com/journeymidnight/aws-sdk-go/aws"
 	"github.com/journeymidnight/aws-sdk-go/aws/credentials"
 	"github.com/journeymidnight/aws-sdk-go/aws/session"
 	"github.com/journeymidnight/aws-sdk-go/service/s3"
-	"yig-collector/config"
 )
 
 type S3Client struct {
