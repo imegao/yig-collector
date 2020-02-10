@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/imegao/yig-collector/config"
 	"github.com/imegao/yig-collector/s3client"
 	"github.com/imegao/yig-collector/tidbclient"
@@ -150,7 +149,7 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 	//通过时间戳，访问API获取数据  if 返回=null则退出
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(postBuffer))
 	if err != nil {
-		logger.Println("[ERROR] Http new request error:", err)
+		logger.Println("[ERROR] Http new request error:", err.error())
 	}
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("Authorization", "Basic ZWxhc3RpYzpSemZ3QDIwMTk=")
@@ -158,12 +157,12 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 	resp, err := clientScroll.Do(request) //发送请求
 	defer resp.Body.Close()
 	if err != nil {
-		logger.Println("[ERROR] Client do error:", err)
+		logger.Println("[ERROR] Client do error:", err.error())
 	}
 	//解析响应的数据
 	ResponseData, err := ParseJsonWithStruct(resp.Body)
 	if err != nil {
-		logger.Println("[ERROR] Response body read error:", err)
+		logger.Println("[ERROR] Response body read error:", err.error())
 
 	}
 
@@ -236,7 +235,10 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 
 func runCollector() {
 	logger.Println("[INFO] Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
-	tc := tidbclient.NewTidbClient()
+	tc, err:= tidbclient.NewTidbClient()
+	if err != nil{
+		logger.Println("[ERROR] Response body(contain id) read error:", err.error())
+	}
 	sc := s3client.NewS3()
 	// 获取上个小时时间戳
 	start, end, timestr := HourTimestamp()
@@ -247,11 +249,11 @@ func runCollector() {
 
 	ResponseDataContainId, err := HandleRequestAndResponse(apiIdUrl, postBuffer)
 	if err != nil {
-		logger.Println("[ERROR] Response body(contain id) read error:", err)
+		logger.Println("[ERROR] Response body(contain id) read error:", err.error())
 	}
 	err = WriteToLogFile(ResponseDataContainId, tc, sc, timestr)
 	if err != nil {
-		logger.Println("[ERROR] Write to log file is error:", err)
+		logger.Println("[ERROR] Write to log file is error:", err.error())
 	}
 	bufferScroll := []byte(`{"scroll":"10m","scroll_id":"` + ResponseDataContainId.ScrollId + `"}`)
 	apiScrollUrl := "http://10.253.146.68:9200/_search/scroll"
@@ -259,7 +261,7 @@ func runCollector() {
 	for {
 		ResponseData, err := HandleRequestAndResponse(apiScrollUrl, bufferScroll)
 		if err != nil {
-			logger.Println("[ERROR] Response body read error:", err)
+			logger.Println("[ERROR] Response body read error:", err.error())
 		}
 		if len(ResponseData.Hits.Hits) == 0 {
 			UploadBucketLogFile(tempBucketName, tc, sc, timestr)
@@ -267,7 +269,7 @@ func runCollector() {
 		}
 		err = WriteToLogFile(ResponseData, tc, sc, timestr)
 		if err != nil {
-			logger.Println("[ERROR] Write to log file is error:", err)
+			logger.Println("[ERROR] Write to log file is error:", err.error())
 		}
 	}
 
@@ -286,10 +288,10 @@ func HourTimestamp() (string, string, string) {
 func main() {
 	err := config.ReadConfig()
 	if err != nil {
-		logger.Println("[ERROR] Read config error:", err)
+		logger.Println("[ERROR] Read config error:", err.error())
 	}
-	//f, err := os.OpenFile(config.Conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)//读写，不存在则添加 追加 权限www
-	f, err := os.OpenFile("a.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666) //读写，不存在则添加 追加 权限www
+	f, err := os.OpenFile(config.Conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)//读写，不存在则添加 追加 权限www
+	//f, err := os.OpenFile("a.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666) //读写，不存在则添加 追加 权限www
 	if err != nil {
 		logger.Println("[ERROR] Failed to open log file " + config.Conf.LogPath)
 	}
