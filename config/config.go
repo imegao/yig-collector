@@ -37,4 +37,5 @@ func ReadConfig() error {
 		panic("[ERROR] Load yig-collector.toml error: " + err.Error())
 		return err
 	}
+	return nil
 }
