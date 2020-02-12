@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"github.com/robfig/cron"
 )
 
 var logger *log.Logger
@@ -101,7 +102,7 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 	}
 	//push文件到指定桶中
 	func() {
-		f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND, 0666) //打开文件
+		f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND|os.O_WRONLY, 0666) //打开文件
 		defer f.Close()
 		if err != nil {
 			log.Println("[ERROR] Open file failed: ", err.Error())
@@ -278,6 +279,7 @@ func runCollector() {
 
 func HourTimestamp() (string, string, string) {
 	now := time.Now()
+	//fmt.Println("***************",time.Unix(now).Format("2006-01-02 15:04:05"))
 	timestamp := now.Unix() - int64(now.Second()) - int64((60 * now.Minute()))
 	endtime := time.Unix(timestamp-3601, 0).Format("2006-01-02 15:04:05")
 	starttime := time.Unix(timestamp-7200, 0).Format("2006-01-02 15:04:05")
@@ -301,8 +303,9 @@ func main() {
 	logger.Println("[INFO] Start Yig Collector...")   //日志输出到命令行
 	logger.Printf("[TRACE] Config: %+v", config.Conf) //输出conf信息
 	runCollector()
-	//c := cron.New()
-	//spec:="* * * *"
-	//c.AddFunc(spec, runCollector)
-	//c.Start()
+	c := cron.New()
+	spec:="0 0 * * *"
+	c.AddFunc(spec, runCollector)
+	c.Start()
+	select {}
 }
