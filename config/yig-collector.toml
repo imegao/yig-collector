@@ -1,10 +1,12 @@
 log_path = "/var/log/yig/collector.log"
-bucket_log_path =""
+bucket_log_path = ""
 tidb_info = "root:@tcp(192.168.2.128:4000)/yig"
 db_max_open_conns = 10240
 db_max_idle_conns = 1024
 db_conn_max_life_seconds = 300
-
+file_size_limit = 268435456
+api_id_url = "http://10.253.146.68:9200/log_4e2f5e831f4545df852a920f08c9d3c6/_search?scroll=10m"
+api_scroll_url = "http://10.253.146.68:9200/_search/scroll"
 [producer]
 endpoint = "s3.test.com:8080"
 accessKey = "hehehehe"
