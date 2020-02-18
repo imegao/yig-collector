@@ -1,9 +1,9 @@
 package config
 
 import (
-	"fmt"
 	"github.com/BurntSushi/toml"
 	"io/ioutil"
+	"log"
 )
 
 const configPath = "config/yig-collector.toml"
@@ -27,17 +27,16 @@ type DummyProducer struct {
 }
 var Conf Config
 func ReadConfig() error {
-	data, err := ioutil.ReadFile(configPath)  //读取配置文件
-	if err != nil {    //两个err嵌套
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
 		if err != nil {
-			panic("[ERROR] Cannot open /etc/yig/yig-collector.toml")
+			log.Println("Read config error:", err.Error())
 			return err
 		}
 	}
-	fmt.Println(string(data))
-	_, err = toml.Decode(string(data), &Conf)  //解析配置文件
+	_, err = toml.Decode(string(data), &Conf)
 	if err != nil {
-		panic("[ERROR] Load yig-collector.toml error: " + err.Error())
+		log.Println("Read config error:", err.Error())
 		return err
 	}
 	return nil

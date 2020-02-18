@@ -1,4 +1,4 @@
-Unit]
+[Unit]
 Description=yig-collector
 After=network.target
 

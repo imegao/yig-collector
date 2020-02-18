@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/imegao/yig-collector/config"
-	"github.com/imegao/yig-collector/log"
+	logger "github.com/imegao/yig-collector/log"
 	"github.com/imegao/yig-collector/s3client"
 	_ "github.com/imegao/yig-collector/s3client"
 	"github.com/imegao/yig-collector/tidbclient"
 	"github.com/robfig/cron"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -87,13 +88,13 @@ type InputType struct {
 func ParseJsonWithStruct(response io.Reader) (*ESJsonResponse, error) {
 	data, err := ioutil.ReadAll(response)
 	if err != nil {
-		log.Error.Println("Read file error: ", err.Error())
+		logger.Error.Println("Read file error: ", err.Error())
 		return nil, err
 	}
 	configStruct := &ESJsonResponse{}
 	err = json.Unmarshal(data, &configStruct)
 	if err != nil {
-		log.Error.Println("Json unmarshal error:", err.Error())
+		logger.Error.Println("Json unmarshal error:", err.Error())
 		return nil, err
 	}
 
@@ -121,7 +122,7 @@ func HourTimestamp() (string, string, string) {
 func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, error) {
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(postBuffer))
 	if err != nil {
-		log.Error.Println("Http new request error:", err.Error())
+		logger.Error.Println("Http new request error:", err.Error())
 	}
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("Authorization", "Basic ZWxhc3RpYzpSemZ3QDIwMTk=")
@@ -129,12 +130,12 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 	resp, err := clientScroll.Do(request)
 	defer resp.Body.Close()
 	if err != nil {
-		log.Error.Println("Client do error:", err.Error())
+		logger.Error.Println("Client do error:", err.Error())
 	}
 	//Parsing the data of the response
 	ResponseData, err := ParseJsonWithStruct(resp.Body)
 	if err != nil {
-		log.Error.Println("Response body read error:", err.Error())
+		logger.Error.Println("Response body read error:", err.Error())
 
 	}
 
@@ -145,42 +146,40 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 	//通过临时变量的桶名字访问tidb获取指定桶和指定前缀
 	bucket, err := tc.GetBucket(bucketName)
 	if err != nil {
-		log.Error.Println("Get bucket from tidb failed: ", err.Error())
+		logger.Error.Println("Get bucket from tidb failed: ", err.Error())
 	}
 	//TODO:开启桶公共读写
 	//push文件到指定桶中
 	f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND|os.O_WRONLY, 0666) //打开文件
 	defer f.Close()
 	if err != nil {
-		log.Error.Println("Open file failed: ", err.Error())
+		logger.Error.Println("Open file failed: ", err.Error())
 	}
 	TargetPrefix := bucket.BucketLogging.LoggingEnabled.TargetPrefix
 	TargetBucket := bucket.BucketLogging.LoggingEnabled.TargetBucket
 	err = sc.PutObject(TargetBucket, TargetPrefix+bucketName+timestr+"-"+strconv.Itoa(counter), f)
 	if err != nil {
-		log.Error.Println("Put object failed: ", err.Error())
+		logger.Error.Println("Put object failed: ", err.Error())
 		return
 	}
 	err = os.Remove(bucketName + timestr + "-" + strconv.Itoa(counter))
 	if err != nil {
-		log.Error.Println("Remove file failed: ", err.Error())
+		logger.Error.Println("Remove file failed: ", err.Error())
 	}
 
 }
 
 func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string) error {
-	//创建桶日志文件
-	//for 处理数据数组，将数据写入日志文件中
+	//Creat bucket log file
 	for _, bucketSource := range ResponseData.Hits.Hits {
-		//获取桶名称
-		//判断与上一个桶名称是否相同
+		//Judge whether it is the same as the last bucket name
 		bucketName := bucketSource.Source.BucketName
 		if bucketName == tempBucketName {
 			fileInfo, err := os.Stat(bucketName + timestr + "-" + strconv.Itoa(counter))
 			if err != nil {
-				log.Error.Println("File write failed: ", err.Error())
+				logger.Error.Println("File write failed: ", err.Error())
 			}
-			//文件满，推上去，计数器加1，创建文件
+			//File full, push up, counter plus 1, create file
 			if fileInfo.Size() >= (config.Conf.FileSizeLimit<<20) {
 				UploadBucketLogFile(bucketName, tc, sc, timestr)
 				counter = counter + 1
@@ -188,41 +187,39 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 					f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
 					defer f.Close()
 					if err != nil {
-						log.Error.Println("File open failed: ", err.Error())
+						logger.Error.Println("File open failed: ", err.Error())
 					}
 				}()
 
 			}
-			//对json 文件格式化转换
 			SingleRowLog := MosaicLog(bucketSource.Source)
 			func() {
-				//将该条数据写入文件中
+				//Write the data to the file
 				f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND, 0666)
 				defer f.Close()
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
-					log.Error.Println("File write failed: ", err.Error())
+					logger.Error.Println("File write failed: ", err.Error())
 				}
 			}()
 		} else {
 			if tempBucketName != "" {
 				UploadBucketLogFile(tempBucketName, tc, sc, timestr)
 			}
-			//更新桶名称临时变量
+			//Update bucket name temporary variable
 			tempBucketName = bucketName
-			//计数器清零
+			//Counter clear
 			counter = 0
 			func() {
-				//创建日志文件
 				f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
 				defer f.Close()
 				if err != nil {
-					log.Error.Println("File open failed: ", err.Error())
+					logger.Error.Println("File open failed: ", err.Error())
 				}
 				SingleRowLog := MosaicLog(bucketSource.Source)
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
-					log.Error.Println("File write failed: ", err.Error())
+					logger.Error.Println("File write failed: ", err.Error())
 				}
 			}()
 			continue
@@ -232,10 +229,10 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 }
 
 func runCollector() {
-	log.Info.Println("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
+	logger.Info.Println("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
 	tc, err:= tidbclient.NewTidbClient()
 	if err != nil{
-		log.Error.Println("Response body(contain id) read error:", err.Error())
+		logger.Error.Println("Response body(contain id) read error:", err.Error())
 	}
 	sc := s3client.NewS3()
 	//generate search start and end time
@@ -244,11 +241,11 @@ func runCollector() {
 	postBuffer := []byte(`{"query":{"bool":{"must":[{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
 	ResponseDataContainId, err := HandleRequestAndResponse(config.Conf.ApiIdUrl, postBuffer)
 	if err != nil {
-		log.Error.Println("Response body(contain id) read error:", err.Error())
+		logger.Error.Println("Response body(contain id) read error:", err.Error())
 	}
 	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime)
 	if err != nil {
-		log.Error.Println("Write to log file is error:", err.Error())
+		logger.Error.Println("Write to log file is error:", err.Error())
 	}
 	bufferScroll := []byte(`{"scroll":"10m","scroll_id":"` + ResponseDataContainId.ScrollId + `"}`)
     //Through timestamp, access API to get data
@@ -256,7 +253,7 @@ func runCollector() {
 	for {
 		ResponseData, err := HandleRequestAndResponse(config.Conf.ApiScrollUrl, bufferScroll)
 		if err != nil {
-			log.Error.Println("Response body read error:", err.Error())
+			logger.Error.Println("Response body read error:", err.Error())
 		}
 		if len(ResponseData.Hits.Hits) == 0 {
 			UploadBucketLogFile(tempBucketName, tc, sc, lastTime) //处理最后一组数据推上去
@@ -264,11 +261,11 @@ func runCollector() {
 		}
 		err = WriteToLogFile(ResponseData, tc, sc, lastTime)
 		if err != nil {
-			log.Error.Println("Write to log file is error:", err.Error())
+			logger.Error.Println("Write to log file is error:", err.Error())
 		}
 	}
 
-	log.Info.Println("Finish runCollector", time.Now().Format("2006-01-02 15:04:05"))
+	logger.Info.Println("Finish runCollector", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 
@@ -277,17 +274,11 @@ func main() {
 	//Read configure file
 	err := config.ReadConfig()
 	if err != nil {
-		log.Error.Println("Read config error:", err.Error())
+		log.Println("Read config error:", err.Error())
 	}
-	//Creat log file
-	f, err := os.OpenFile(config.Conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	defer f.Close()
-	if err != nil {
-		log.Error.Println("Failed to open log file " + config.Conf.LogPath)
-	}
-
-	log.Info.Println("Start Yig Collector...")
-	log.Trace.Printf("Config: %+v", config.Conf)
+	logger.InitLog()
+	logger.Info.Println("Start Yig Collector...")
+	logger.Trace.Printf("Config: %+v", config.Conf)
 	//Set timer and ever time working
 	c := cron.New()
 	spec:="0 0 * * *"
