@@ -143,13 +143,11 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 }
 
 func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string) {
-	//通过临时变量的桶名字访问tidb获取指定桶和指定前缀
 	bucket, err := tc.GetBucket(bucketName)
 	if err != nil {
 		logger.Error.Println("Get bucket from tidb failed: ", err.Error())
 	}
-	//TODO:开启桶公共读写
-	//push文件到指定桶中
+	//TODO:Open bucket public-read
 	f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND|os.O_WRONLY, 0666) //打开文件
 	defer f.Close()
 	if err != nil {
@@ -256,7 +254,7 @@ func runCollector() {
 			logger.Error.Println("Response body read error:", err.Error())
 		}
 		if len(ResponseData.Hits.Hits) == 0 {
-			UploadBucketLogFile(tempBucketName, tc, sc, lastTime) //处理最后一组数据推上去
+			UploadBucketLogFile(tempBucketName, tc, sc, lastTime)
 			break
 		}
 		err = WriteToLogFile(ResponseData, tc, sc, lastTime)
