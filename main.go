@@ -4,23 +4,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/imegao/yig-collector/config"
-	logger "github.com/imegao/yig-collector/log"
+	"github.com/imegao/yig-collector/log"
 	"github.com/imegao/yig-collector/s3client"
 	_ "github.com/imegao/yig-collector/s3client"
 	"github.com/imegao/yig-collector/tidbclient"
 	"github.com/robfig/cron"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 )
 
-var tempBucketName = ""
-var counter = 0
-
+var Logger log.Logger
 type ESJsonResponse struct {
 	ScrollId string `json:"_scroll_id"`
 	Took     int    `json:"took"`
@@ -88,13 +85,13 @@ type InputType struct {
 func ParseJsonWithStruct(response io.Reader) (*ESJsonResponse, error) {
 	data, err := ioutil.ReadAll(response)
 	if err != nil {
-		logger.Error.Println("Read file error: ", err.Error())
+		Logger.Error("Read file error: ", err.Error())
 		return nil, err
 	}
 	configStruct := &ESJsonResponse{}
 	err = json.Unmarshal(data, &configStruct)
 	if err != nil {
-		logger.Error.Println("Json unmarshal error:", err.Error())
+		Logger.Error("Json unmarshal error:", err.Error())
 		return nil, err
 	}
 
@@ -122,7 +119,7 @@ func HourTimestamp() (string, string, string) {
 func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, error) {
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(postBuffer))
 	if err != nil {
-		logger.Error.Println("Http new request error:", err.Error())
+		Logger.Error("Http new request error:", err.Error())
 	}
 	request.Header.Add("Content-Type", "application/json")
 	request.Header.Add("Authorization", "Basic ZWxhc3RpYzpSemZ3QDIwMTk=")
@@ -130,44 +127,45 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 	resp, err := clientScroll.Do(request)
 	defer resp.Body.Close()
 	if err != nil {
-		logger.Error.Println("Client do error:", err.Error())
+		Logger.Error("Client do error:", err.Error())
 	}
 	//Parsing the data of the response
 	ResponseData, err := ParseJsonWithStruct(resp.Body)
 	if err != nil {
-		logger.Error.Println("Response body read error:", err.Error())
+		Logger.Error("Response body read error:", err.Error())
 
 	}
 
 	return ResponseData, err
 }
 
-func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string) {
+func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string, counter int) {
+	filename:=bucketName+timestr+"-"+strconv.Itoa(counter)
 	bucket, err := tc.GetBucket(bucketName)
 	if err != nil {
-		logger.Error.Println("Get bucket from tidb failed: ", err.Error())
+		Logger.Error("Get bucket from tidb failed: ", err.Error())
 	}
 	//TODO:Open bucket public-read
-	f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND|os.O_WRONLY, 0666) //打开文件
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0666) //打开文件
 	defer f.Close()
 	if err != nil {
-		logger.Error.Println("Open file failed: ", err.Error())
+		Logger.Error("Open file failed: ", err.Error())
 	}
 	TargetPrefix := bucket.BucketLogging.LoggingEnabled.TargetPrefix
 	TargetBucket := bucket.BucketLogging.LoggingEnabled.TargetBucket
-	err = sc.PutObject(TargetBucket, TargetPrefix+bucketName+timestr+"-"+strconv.Itoa(counter), f)
+	err = sc.PutObject(TargetBucket, TargetPrefix+filename, f)
 	if err != nil {
-		logger.Error.Println("Put object failed: ", err.Error())
+		Logger.Error("Put object failed: ", err.Error())
 		return
 	}
-	err = os.Remove(bucketName + timestr + "-" + strconv.Itoa(counter))
+	err = os.Remove(filename)
 	if err != nil {
-		logger.Error.Println("Remove file failed: ", err.Error())
+		Logger.Error("Remove file failed: ", err.Error())
 	}
 
 }
 
-func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string) error {
+func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string, counter int, tempBucketName string) error {
 	//Creat bucket log file
 	for _, bucketSource := range ResponseData.Hits.Hits {
 		//Judge whether it is the same as the last bucket name
@@ -175,17 +173,17 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 		if bucketName == tempBucketName {
 			fileInfo, err := os.Stat(bucketName + timestr + "-" + strconv.Itoa(counter))
 			if err != nil {
-				logger.Error.Println("File write failed: ", err.Error())
+				Logger.Error("File write failed: ", err.Error())
 			}
 			//File full, push up, counter plus 1, create file
 			if fileInfo.Size() >= (config.Conf.FileSizeLimit<<20) {
-				UploadBucketLogFile(bucketName, tc, sc, timestr)
+				UploadBucketLogFile(bucketName, tc, sc, timestr,counter)
 				counter = counter + 1
 				func() {
 					f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
 					defer f.Close()
 					if err != nil {
-						logger.Error.Println("File open failed: ", err.Error())
+						Logger.Error("File open failed: ", err.Error())
 					}
 				}()
 
@@ -197,12 +195,12 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 				defer f.Close()
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
-					logger.Error.Println("File write failed: ", err.Error())
+					Logger.Error("File write failed: ", err.Error())
 				}
 			}()
 		} else {
 			if tempBucketName != "" {
-				UploadBucketLogFile(tempBucketName, tc, sc, timestr)
+				UploadBucketLogFile(tempBucketName, tc, sc, timestr,counter)
 			}
 			//Update bucket name temporary variable
 			tempBucketName = bucketName
@@ -212,12 +210,12 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 				f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
 				defer f.Close()
 				if err != nil {
-					logger.Error.Println("File open failed: ", err.Error())
+					Logger.Error("File open failed: ", err.Error())
 				}
 				SingleRowLog := MosaicLog(bucketSource.Source)
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
-					logger.Error.Println("File write failed: ", err.Error())
+					Logger.Error("File write failed: ", err.Error())
 				}
 			}()
 			continue
@@ -227,10 +225,12 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 }
 
 func runCollector() {
-	logger.Info.Println("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
+	var tempBucketName = ""
+	var counter = 0
+	Logger.Error("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
 	tc, err:= tidbclient.NewTidbClient()
 	if err != nil{
-		logger.Error.Println("Response body(contain id) read error:", err.Error())
+		Logger.Error("Response body(contain id) read error:", err.Error())
 	}
 	sc := s3client.NewS3()
 	//generate search start and end time
@@ -239,11 +239,11 @@ func runCollector() {
 	postBuffer := []byte(`{"query":{"bool":{"must":[{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
 	ResponseDataContainId, err := HandleRequestAndResponse(config.Conf.ApiIdUrl, postBuffer)
 	if err != nil {
-		logger.Error.Println("Response body(contain id) read error:", err.Error())
+		Logger.Error("Response body(contain id) read error:", err.Error())
 	}
-	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime)
+	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime,counter,tempBucketName)
 	if err != nil {
-		logger.Error.Println("Write to log file is error:", err.Error())
+		Logger.Error("Write to log file is error:", err.Error())
 	}
 	bufferScroll := []byte(`{"scroll":"10m","scroll_id":"` + ResponseDataContainId.ScrollId + `"}`)
     //Through timestamp, access API to get data
@@ -251,32 +251,30 @@ func runCollector() {
 	for {
 		ResponseData, err := HandleRequestAndResponse(config.Conf.ApiScrollUrl, bufferScroll)
 		if err != nil {
-			logger.Error.Println("Response body read error:", err.Error())
+			Logger.Error("Response body read error:", err.Error())
 		}
 		if len(ResponseData.Hits.Hits) == 0 {
-			UploadBucketLogFile(tempBucketName, tc, sc, lastTime)
+			UploadBucketLogFile(tempBucketName, tc, sc, lastTime,counter)
 			break
 		}
-		err = WriteToLogFile(ResponseData, tc, sc, lastTime)
+		err = WriteToLogFile(ResponseData, tc, sc, lastTime,counter,tempBucketName)
 		if err != nil {
-			logger.Error.Println("Write to log file is error:", err.Error())
+			Logger.Error("Write to log file is error:", err.Error())
 		}
 	}
 
-	logger.Info.Println("Finish runCollector", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Finish runCollector", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 
 
 func main() {
 	//Read configure file
-	err := config.ReadConfig()
-	if err != nil {
-		log.Println("Read config error:", err.Error())
-	}
-	logger.InitLog()
-	logger.Info.Println("Start Yig Collector...")
-	logger.Trace.Printf("Config: %+v", config.Conf)
+	config.ReadConfig()
+	Logger = log.NewFileLogger(config.Conf.LogPath, 2)
+	defer Logger.Close()
+	Logger.Info("Start Yig Collector...")
+	Logger.Info("Config: %+v", config.Conf)
 	//Set timer and ever time working
 	c := cron.New()
 	spec:="0 0 * * *"

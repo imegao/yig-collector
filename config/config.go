@@ -26,18 +26,17 @@ type DummyProducer struct {
 	SecretKey string
 }
 var Conf Config
-func ReadConfig() error {
+func ReadConfig() {
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		if err != nil {
 			log.Println("Read config error:", err.Error())
-			return err
+
 		}
 	}
 	_, err = toml.Decode(string(data), &Conf)
 	if err != nil {
 		log.Println("Read config error:", err.Error())
-		return err
+
 	}
-	return nil
 }

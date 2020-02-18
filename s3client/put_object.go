@@ -17,12 +17,3 @@ func (s3client *S3Client) PutObject(bucketName, key string, value io.Reader) (er
 	}
 	return
 }
-
-func (s3client *S3Client) PutBucketAcl(bucketName string, acl string) (err error) {
-	params := &s3.PutBucketAclInput{
-		Bucket: aws.String(bucketName),
-		ACL:    aws.String(acl),
-	}
-	_, err = s3client.Client.PutBucketAcl(params)
-	return err
-}
