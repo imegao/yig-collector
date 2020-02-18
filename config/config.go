@@ -16,7 +16,7 @@ type Config struct {
 	DbConnMaxLifeSeconds   int           `toml:"db_conn_max_life_seconds"`
 	ApiIdUrl               string        `toml:"api_id_url"`
 	ApiScrollUrl           string        `toml:"api_scroll_url"`
-	FileSizeLimit          int64           `toml:"file_size_limit"`
+	FileSizeLimit          int64         `toml:"file_size_limit"`
 	Producer               DummyProducer `toml:"producer"`
 }
 
