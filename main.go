@@ -107,12 +107,13 @@ func MosaicLog(b DataSource) string {
 }
 
 func HourTimestamp() (string, string, string) {
-	now := time.Now()
+	now:=time.Now()
+	nowHour :=time.Unix(now.Unix()- int64(now.Second()) - int64((60 * now.Minute())), 0)
 	h1, _ := time.ParseDuration("-1h1s")
 	h2, _ := time.ParseDuration("-2h")
-	endTime := now.Add(h1).Format("2006-01-02 15:04:05")
-	startTime := now.Add(h2).Format("2006-01-02 15:04:05")
-	lastTime := now.Add(h2).Format("2006-01-02-15-04-05")
+	endTime := nowHour.Add(h1).Format("2006-01-02 15:04:05")
+	startTime := nowHour.Add(h2).Format("2006-01-02 15:04:05")
+	lastTime := nowHour.Add(h2).Format("2006-01-02-15-04-05")
 	return startTime, endTime, lastTime
 }
 
@@ -125,10 +126,10 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 	request.Header.Add("Authorization", "Basic ZWxhc3RpYzpSemZ3QDIwMTk=")
 	clientScroll := &http.Client{}
 	resp, err := clientScroll.Do(request)
-	defer resp.Body.Close()
 	if err != nil {
 		Logger.Error("Client do error:", err.Error())
 	}
+	defer resp.Body.Close()
 	//Parsing the data of the response
 	ResponseData, err := ParseJsonWithStruct(resp.Body)
 	if err != nil {
@@ -147,10 +148,10 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 	}
 	//TODO:Open bucket public-read
 	f, err := os.OpenFile(filename, os.O_APPEND, 6666) //打开文件
-	defer f.Close()
 	if err != nil {
 		Logger.Error("Open file failed: ", err.Error())
 	}
+	defer f.Close()
 	TargetPrefix := bucket.BucketLogging.LoggingEnabled.TargetPrefix
 	TargetBucket := bucket.BucketLogging.LoggingEnabled.TargetBucket
 	err = sc.PutObject(TargetBucket, TargetPrefix+filename, f)
@@ -180,10 +181,10 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 				*counter = *counter + 1
 				func() {
 					f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(*counter))
-					defer f.Close()
 					if err != nil {
 						Logger.Error("File open failed: ", err.Error())
 					}
+					defer f.Close()
 				}()
 
 			}
@@ -191,11 +192,11 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 			func() {
 				//Write the data to the file
 				f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(*counter), os.O_APPEND|os.O_WRONLY, 0666)
-				defer f.Close()
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
 					Logger.Error("File write failed: ", err.Error())
 				}
+				defer f.Close()
 			}()
 		} else {
 			if *tempBucketName != "" {
@@ -207,10 +208,10 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 			*counter = 0
 			func() {
 				f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(*counter))
-				defer f.Close()
 				if err != nil {
 					Logger.Error("File open failed: ", err.Error())
 				}
+				defer f.Close()
 				SingleRowLog := MosaicLog(bucketSource.Source)
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
@@ -276,7 +277,7 @@ func main() {
 	Logger.Info("Config: ", config.Conf)
 	//Set timer and ever time working
 	c := cron.New()
-	spec:="0 0 * * *"
+	spec:="20 0 * * *"
 	c.AddFunc(spec, runCollector)
 	c.Start()
 	select {}
