@@ -146,7 +146,7 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 		Logger.Error("Get bucket from tidb failed: ", err.Error())
 	}
 	//TODO:Open bucket public-read
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0666) //打开文件
+	f, err := os.OpenFile(filename, os.O_APPEND, 6666) //打开文件
 	defer f.Close()
 	if err != nil {
 		Logger.Error("Open file failed: ", err.Error())
@@ -156,7 +156,6 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 	err = sc.PutObject(TargetBucket, TargetPrefix+filename, f)
 	if err != nil {
 		Logger.Error("Put object failed: ", err.Error())
-		return
 	}
 	err = os.Remove(filename)
 	if err != nil {
@@ -165,22 +164,22 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 
 }
 
-func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string, counter int, tempBucketName string) error {
+func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc *s3client.S3Client, timestr string, counter *int, tempBucketName *string) error {
 	//Creat bucket log file
 	for _, bucketSource := range ResponseData.Hits.Hits {
 		//Judge whether it is the same as the last bucket name
 		bucketName := bucketSource.Source.BucketName
-		if bucketName == tempBucketName {
-			fileInfo, err := os.Stat(bucketName + timestr + "-" + strconv.Itoa(counter))
+		if bucketName == *tempBucketName {
+			fileInfo, err := os.Stat(bucketName + timestr + "-" + strconv.Itoa(*counter))
 			if err != nil {
 				Logger.Error("File write failed: ", err.Error())
 			}
 			//File full, push up, counter plus 1, create file
 			if fileInfo.Size() >= (config.Conf.FileSizeLimit<<20) {
-				UploadBucketLogFile(bucketName, tc, sc, timestr,counter)
-				counter = counter + 1
+				UploadBucketLogFile(bucketName, tc, sc, timestr,*counter)
+				*counter = *counter + 1
 				func() {
-					f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
+					f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(*counter))
 					defer f.Close()
 					if err != nil {
 						Logger.Error("File open failed: ", err.Error())
@@ -191,7 +190,7 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 			SingleRowLog := MosaicLog(bucketSource.Source)
 			func() {
 				//Write the data to the file
-				f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(counter), os.O_APPEND, 0666)
+				f, err := os.OpenFile(bucketName+timestr+"-"+strconv.Itoa(*counter), os.O_APPEND|os.O_WRONLY, 0666)
 				defer f.Close()
 				_, err = io.WriteString(f, SingleRowLog+"\n")
 				if err != nil {
@@ -199,15 +198,15 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 				}
 			}()
 		} else {
-			if tempBucketName != "" {
-				UploadBucketLogFile(tempBucketName, tc, sc, timestr,counter)
+			if *tempBucketName != "" {
+				UploadBucketLogFile(*tempBucketName, tc, sc, timestr,*counter)
 			}
 			//Update bucket name temporary variable
-			tempBucketName = bucketName
+			*tempBucketName = bucketName
 			//Counter clear
-			counter = 0
+			*counter = 0
 			func() {
-				f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(counter))
+				f, err := os.Create(bucketName + timestr + "-" + strconv.Itoa(*counter))
 				defer f.Close()
 				if err != nil {
 					Logger.Error("File open failed: ", err.Error())
@@ -227,7 +226,7 @@ func WriteToLogFile(ResponseData *ESJsonResponse, tc *tidbclient.TidbClient, sc 
 func runCollector() {
 	var tempBucketName = ""
 	var counter = 0
-	Logger.Error("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to runCollector", time.Now().Format("2006-01-02 15:04:05"))
 	tc, err:= tidbclient.NewTidbClient()
 	if err != nil{
 		Logger.Error("Response body(contain id) read error:", err.Error())
@@ -241,7 +240,7 @@ func runCollector() {
 	if err != nil {
 		Logger.Error("Response body(contain id) read error:", err.Error())
 	}
-	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime,counter,tempBucketName)
+	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime,&counter,&tempBucketName)
 	if err != nil {
 		Logger.Error("Write to log file is error:", err.Error())
 	}
@@ -257,7 +256,7 @@ func runCollector() {
 			UploadBucketLogFile(tempBucketName, tc, sc, lastTime,counter)
 			break
 		}
-		err = WriteToLogFile(ResponseData, tc, sc, lastTime,counter,tempBucketName)
+		err = WriteToLogFile(ResponseData, tc, sc, lastTime,&counter,&tempBucketName)
 		if err != nil {
 			Logger.Error("Write to log file is error:", err.Error())
 		}
@@ -274,7 +273,7 @@ func main() {
 	Logger = log.NewFileLogger(config.Conf.LogPath, 2)
 	defer Logger.Close()
 	Logger.Info("Start Yig Collector...")
-	Logger.Info("Config: %+v", config.Conf)
+	Logger.Info("Config: ", config.Conf)
 	//Set timer and ever time working
 	c := cron.New()
 	spec:="0 0 * * *"
