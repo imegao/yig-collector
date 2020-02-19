@@ -6,7 +6,7 @@ import (
 	"log"
 )
 
-const configPath = "config/yig-collector.toml"
+const configPath = "/etc/yig/yig-collector.toml"
 type Config struct {
 	LogPath                string        `toml:"log_path"`
 	BucketLogPath          string        `toml:"bucket_log_path"`
