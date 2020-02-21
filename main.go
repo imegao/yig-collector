@@ -241,6 +241,9 @@ func runCollector() {
 	if err != nil {
 		Logger.Error("Response body(contain id) read error:", err.Error())
 	}
+	if len(ResponseDataContainId.Hits.Hits)==0{
+		Logger.Info(start, " No log push at this time")
+	}
 	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime,&counter,&tempBucketName)
 	if err != nil {
 		Logger.Error("Write to log file is error:", err.Error())
