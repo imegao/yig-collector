@@ -236,7 +236,7 @@ func runCollector() {
 	//generate search start and end time
 	start, end, lastTime := HourTimestamp()
 
-	postBuffer := []byte(`{"query":{"bool":{"must":[{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
+	postBuffer := []byte(`{"query":{"bool":{"must":[{"term":{"bucket_logging.keyword":"true"}},{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
 	ResponseDataContainId, err := HandleRequestAndResponse(config.Conf.ApiIdUrl, postBuffer)
 	if err != nil {
 		Logger.Error("Response body(contain id) read error:", err.Error())
