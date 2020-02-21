@@ -158,6 +158,7 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 	if err != nil {
 		Logger.Error("Put object failed: ", err.Error())
 	}
+	Logger.Info(filename," upload completed")
 	err = os.Remove(filename)
 	if err != nil {
 		Logger.Error("Remove file failed: ", err.Error())
