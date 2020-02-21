@@ -123,7 +123,7 @@ func HandleRequestAndResponse(url string, postBuffer []byte) (*ESJsonResponse, e
 		Logger.Error("Http new request error:", err.Error())
 	}
 	request.Header.Add("Content-Type", "application/json")
-	request.Header.Add("Authorization", "Basic ZWxhc3RpYzpSemZ3QDIwMTk=")
+	request.Header.Add("Authorization", config.Conf.Authorization)
 	clientScroll := &http.Client{}
 	resp, err := clientScroll.Do(request)
 	if err != nil {

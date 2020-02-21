@@ -17,6 +17,7 @@ type Config struct {
 	ApiIdUrl               string        `toml:"api_id_url"`
 	ApiScrollUrl           string        `toml:"api_scroll_url"`
 	FileSizeLimit          int64         `toml:"file_size_limit"`
+	Authorization          string        `toml:"authorization"`
 	Producer               DummyProducer `toml:"producer"`
 }
 
