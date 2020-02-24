@@ -244,6 +244,7 @@ func runCollector() {
 	}
 	if len(ResponseDataContainId.Hits.Hits)==0{
 		Logger.Info(start, " No log push at this time")
+		return
 	}
 	err = WriteToLogFile(ResponseDataContainId, tc, sc, lastTime,&counter,&tempBucketName)
 	if err != nil {
