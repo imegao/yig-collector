@@ -147,7 +147,7 @@ func UploadBucketLogFile(bucketName string, tc *tidbclient.TidbClient, sc *s3cli
 		Logger.Error("Get bucket from tidb failed: ", err.Error())
 	}
 	//TODO:Open bucket public-read
-	f, err := os.OpenFile(filename, os.O_APPEND, 6666) //打开文件
+	f, err := os.OpenFile(filename, os.O_APPEND, 6666)
 	if err != nil {
 		Logger.Error("Open file failed: ", err.Error())
 	}
@@ -237,7 +237,7 @@ func runCollector() {
 	//generate search start and end time
 	start, end, lastTime := HourTimestamp()
 
-	postBuffer := []byte(`{"query":{"bool":{"must":[{"term":{"bucket_logging.keyword":"true"}},{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
+	postBuffer := []byte(`{"size": 100,query":{"bool":{"must":[{"term":{"bucket_logging.keyword":"true"}},{"range":{"time_local":{"gte":"` + start + `","lt":"` + end + `"}}}]}},"sort":[{"bucket_name.keyword":{"order":"asc"}},{"time_local":{"order":"asc"}}]}`)
 	ResponseDataContainId, err := HandleRequestAndResponse(config.Conf.ApiIdUrl, postBuffer)
 	if err != nil {
 		Logger.Error("Response body(contain id) read error:", err.Error())
