@@ -14,7 +14,7 @@ type Bucket struct {
 }
 func (t *TidbClient) GetBucket(bucketName string) (bucket *Bucket, err error) {
 	var bl string
-	sqltext := "select bucketname,bl,uid from buckets where bucketname=?;"
+	sqltext := "select bucketname,logging,uid from buckets where bucketname=?;"
 	bucket = new(Bucket)
 
 	err = t.Client.QueryRow(sqltext, bucketName).Scan(
